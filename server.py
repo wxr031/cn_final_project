@@ -4,7 +4,7 @@ import socket
 online = set()
 
 host = 'localhost'
-port = sys.argv[0]
+port = int(sys.argv[0])
 
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.bind((host, port))
