@@ -122,8 +122,43 @@ def signup():
 		password_validation_input.delete(0, END)
 
 def signin():
-	print('Sign in')
-	pass
+
+	if register_button['text'] == 'Logout':
+		register_button['text'] = 'Submit'
+		username_input['state'] = NORMAL
+		password_input['state'] = NORMAL
+		sign_in_up_button['state'] = NORMAL
+		register_status_text['text'] = ''
+
+	else:
+	
+		username = username_var.get()
+		password = password_var.get()
+
+		assert client is not None
+		client.send(b'SIGNIN')
+
+		response = client.recv(CMD_MAX_LEN)
+		assert response == b'USER&PASS'
+
+		client.send(username.encode() + b'&' + password.encode())
+		response = client.recv(CMD_MAX_LEN)
+		if response == b'OK':
+			register_status_text['text'] = 'Login Succeed'
+			register_status_text['fg'] = 'green'
+			username_input.delete(0, END)
+			password_input.delete(0, END)
+			register_button['text'] = 'Logout'
+			username_input['state'] = DISABLED
+			password_input['state'] = DISABLED
+			sign_in_up_button['state'] = DISABLED
+			
+		elif response == b'REJ':
+			register_status_text['text'] = 'Login Failed'
+			register_status_text['fg'] = 'red'
+			username_input.delete(0, END)
+			password_input.delete(0, END)
+	
 
 def sign_in_up_toggle():
 	if sign_in_up_button['text'] == 'Sign In':
@@ -145,6 +180,8 @@ def sign_in_up_toggle():
 		register_status_text['text'] = ''
 		password_validation_input.place(relx = 0.5, rely = 0.6, anchor = CENTER)
 		password_validation_image_label.place(relx = 0.35, rely = 0.6, anchor = CENTER)
+		
+		
 
 	
 #def get_history(event):

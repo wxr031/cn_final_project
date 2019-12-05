@@ -67,14 +67,18 @@ while True:
 			username, password = tuple(request.split(b'&'))
 			username = username.decode('ascii')
 			password = password.decode('ascii')
+			print(username, password)
 			if not os.path.exists(auth_file):
 				with open(auth_file, 'w') as fw:
 					json.dump({}, fw)
 			with open(auth_file, 'r') as fr:
 				auth = json.load(fr)
-				password_hash = auth[username]
-				if verify_password(password_hash, password):
-					conn.send(b'OK')
+				if username in auth:
+					password_hash = auth[password]
+					if verify_password(password_hash, password):
+						conn.send(b'OK')
+					else:
+						conn.send(b'REJ')
 				else:
 					conn.send(b'REJ')
 			
