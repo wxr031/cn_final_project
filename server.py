@@ -6,7 +6,9 @@ import hashlib
 import binascii
 import threading
 
-online = {}
+online = set()
+online_lock = threading.Lock()
+
 threads = []
 
 CMD_MAX_LEN = 16
@@ -18,7 +20,12 @@ host = 'localhost'
 port = int(sys.argv[1])
 
 auth_file = 'auth.json'
+auth_file_lock = threading.Lock()
 hist_file = 'hist.json'
+hist_file_lock = threading.Lock()
+
+msg_unsent = dict()
+msg_unsent_lock = threading.Lock()
 
 def communicate(conn):
 	while True:
@@ -29,6 +36,8 @@ def communicate(conn):
 			username, password = tuple(request.split(b'&'))
 			username = username.decode('ascii')
 			password = password.decode('ascii')
+
+			auth_file_lock.acquire()
 			if not os.path.exists(auth_file):
 				with open(auth_file, 'w') as fw:
 					json.dump({}, fw)
@@ -42,6 +51,7 @@ def communicate(conn):
 					conn.send(b'OK')
 					with open(auth_file, 'w') as fw:
 						json.dump(auth, fw)
+			auth_file_lock.release()
 
 		elif command == b'SIGNIN':
 			conn.send(b'USER&PASS')
@@ -50,6 +60,8 @@ def communicate(conn):
 			username = username.decode('ascii')
 			password = password.decode('ascii')
 			print(username, password)
+
+			auth_file_lock.acquire()
 			if not os.path.exists(auth_file):
 				with open(auth_file, 'w') as fw:
 					json.dump({}, fw)
@@ -58,18 +70,30 @@ def communicate(conn):
 				if username in auth:
 					password_hash = auth[username]
 					if verify_password(password_hash, password):
+						online_lock.acquire()
+						online.add(username)
+						online_lock.release()
 						conn.send(b'OK')
-						print(conn.getpeername())
 						
 					else:
 						conn.send(b'REJ')
 				else:
 					conn.send(b'REJ')
-			
+			auth_file_lock.release()
+
+		elif command == b'LOGOUT':
+			conn.send(b'USER')
+			username = conn.recv(USER_MAX_LEN).decode('ascii')
+			online_lock.acquire()
+			online.remove(username)
+			online_lock.release()
+
 		elif command == b'HISTORY':
 			conn.send(b'USER')
 			username = conn.recv(USER_MAX_LEN)
 			username = username.decode('ascii')
+
+			hist_file_lock.acquire()
 			if not os.path.exists(hist_file):
 				with open(hist_file, 'w') as fw:
 					json.dump({}, fw)
@@ -80,16 +104,27 @@ def communicate(conn):
 					conn.send(json.dumps(history).encode())
 				else:
 					conn.send(json.dumps([]).encode())
+			hist_file_lock.release()
 
 		elif command == b'MESSAGE':
 			conn.send(b'FROM')
 			sender = conn.recv(USER_MAX_LEN).decode('ascii')
 			conn.send(b'TO')
-			reveicer = conn.recv(USER_MAX_LEN).decode('ascii')
+			receiver = conn.recv(USER_MAX_LEN).decode('ascii')
 			conn.send(b'TEXT')
-			text = conn.recv(TXT_MAX_LEN).decode('ascii')
+			text = conn.recv(TXT_MAX_LEN).decode().strip()
+
+			# write message to message buffer
+			msg_unsent_lock.acquire()
+			if not sender in msg_unsent:
+				msg_unsent[sender] = []
+			msg_unsent[sender].append((receiver, text))
+			msg_unsent_lock.release()
 			
+			print((sender, receiver, text))
+
 			# store message to history
+			hist_file_lock.acquire()
 			if not os.path.exists(hist_file):
 				with open(hist_file, 'w') as fw:
 					json.dump({}, fw)
@@ -97,9 +132,11 @@ def communicate(conn):
 				hists = json.load(fr)
 				if not sender in hists:
 					hists[sender] = []
-				hists[sender].append()
-				with open(auth_file, 'w') as fw:
+				if not text in hists:
+					hists[sender].append(text)
+				with open(hist_file, 'w') as fw:
 					json.dump(hists, fw)
+			hist_file_lock.release()
 
 		elif command == b'CLOSE':
 			conn.close()

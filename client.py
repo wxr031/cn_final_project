@@ -6,6 +6,7 @@ import threading
 import tkinter as tk
 import tkinter.ttk as ttk
 import tkinter.scrolledtext as st
+from tkinter import messagebox
 from tkinter import CENTER, NORMAL, DISABLED, END, INSERT
 
 CMD_MAX_LEN = 16
@@ -26,8 +27,10 @@ def connect():
 	if connect_button['text'] == 'Disconnect':
 		client.send(b'CLOSE')
 		client.close()
+
 		host_input['state'] = NORMAL
 		port_input['state'] = NORMAL
+		
 		connect_button['text'] = 'Connect'
 		status_text['text'] = ''
 
@@ -76,7 +79,6 @@ def connect():
 		host_input['state'] = DISABLED
 		port_input['state'] = DISABLED
 		tabs.tab(1, state = NORMAL)
-		tabs.tab(2, state = NORMAL)
 
 def signup():
 	username = username_var.get()
@@ -115,7 +117,6 @@ def signup():
 		password_validation_input.delete(0, END)
 		return
 	
-	assert client is not None
 	client.send(b'SIGNUP')
 
 	response = client.recv(CMD_MAX_LEN)
@@ -142,22 +143,25 @@ def signin():
 	global current_user
 
 	if register_button['text'] == 'Logout':
+
+		client.send(b'LOGOUT')
+		assert client.recv(CMD_MAX_LEN) == b'USER'
+		client.send(current_user.encode())
+
 		register_button['text'] = 'Submit'
 		username_input['state'] = NORMAL
 		password_input['state'] = NORMAL
 		sign_in_up_button['state'] = NORMAL
 		register_status_text['text'] = ''
-
-		current_user = None
+		tabs.tab(0, state = NORMAL)
+		tabs.tab(2, state = DISABLED)
 
 	else:
 		username = username_var.get()
 		password = password_var.get()
 
-		assert current_user is None
 		current_user = username
 
-		assert client is not None
 		client.send(b'SIGNIN')
 
 		response = client.recv(CMD_MAX_LEN)
@@ -175,6 +179,8 @@ def signin():
 			username_input['state'] = DISABLED
 			password_input['state'] = DISABLED
 			sign_in_up_button['state'] = DISABLED
+			tabs.tab(0, state = DISABLED)
+			tabs.tab(2, state = NORMAL)
 
 		elif response == b'REJ':
 			register_status_text['text'] = 'Login Failed'
@@ -216,20 +222,23 @@ def get_history(_):
 
 def set_message(_):
 	text = history_combo.get()
-	print(text)
+	message_text.delete(1.0, END)
 	message_text.insert(INSERT, text)
 	message_text.insert(END, '')
 
 def messaging():
 	receiver = receiver_var.get()
-	text = message_text.get(1, END)
-	text = text.encode()
+	text = message_text.get(1.0, END)
 
-	conn.send(b'MESSAGE')
-	assert conn.recv(b'FROM')
-	conn.send(current_user.encode())
-	assert conn.recv(b'TO')
-	conn.send(receiver.encode())
+	client.send(b'MESSAGE')
+	assert client.recv(CMD_MAX_LEN) == b'FROM'
+	client.send(current_user.encode())
+	assert client.recv(CMD_MAX_LEN) == b'TO'
+	client.send(receiver.encode())
+	assert client.recv(CMD_MAX_LEN) == b'TEXT'
+	client.send(text.encode())
+
+	messagebox.showinfo('', 'Message sent')
 
 
 window = tk.Tk()
