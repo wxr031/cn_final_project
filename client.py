@@ -2,7 +2,6 @@ import json
 import random
 import sys
 import socket
-import threading
 import tkinter as tk
 import tkinter.ttk as ttk
 import tkinter.scrolledtext as st
@@ -16,8 +15,8 @@ PASS_MAX_LEN = 1024
 
 client = None
 current_user = None
-messages = []
 n_message = 0
+messages = []
 infos = []
 
 def port_in_use(port):
@@ -84,9 +83,9 @@ def connect():
 		tabs.tab(1, state = NORMAL)
 
 def signup():
-	username = username_var.get()
-	password = password_var.get()
-	password_validation = password_validation_var.get()
+	username = username_input.get()
+	password = password_input.get()
+	password_validation = password_validation.get()
 
 	if len(username) == 0 or len(password) == 0:
 		messagebox.showerror('', 'Please provide username and password')
@@ -138,6 +137,9 @@ def signup():
 def signin():
 	
 	global current_user
+	global infos
+	global messages
+	global n_message
 
 	if register_button['text'] == 'Logout':
 
@@ -151,20 +153,18 @@ def signin():
 		sign_in_up_button['state'] = NORMAL
 
 		message_text.delete(1.0, END)
+		infos = []
+		messages = []
+		n_message = 0
 
-		receiver_input['text'] = ''
-		history_combo['value'] = ('---history---')
-		receiving_combo['value'] = ()
-		receiving_text.delete(1.0, END)
-		
 		tabs.tab(0, state = NORMAL)
 		tabs.tab(2, state = DISABLED)
 		tabs.tab(3, state = DISABLED)
 
 	else:
 
-		username = username_var.get()
-		password = password_var.get()
+		username = username_input.get()
+		password = password_input.get()
 
 		current_user = username
 
@@ -190,10 +190,6 @@ def signin():
 			tabs.tab(0, state = DISABLED)
 			tabs.tab(2, state = NORMAL)
 			tabs.tab(3, state = NORMAL)
-
-			history_combo['values'] = ('---history---')
-			receiver_input['text'] = ''
-
 
 		elif response == b'REJ':
 			messagebox.showerror('', 'Invalid username/password')
@@ -259,7 +255,8 @@ def messaging():
 
 	messagebox.showinfo('', 'Message sent')
 
-def receiving(event):
+def receiving(_):
+	print('receiving')
 
 	global n_message
 	
@@ -282,8 +279,8 @@ def receiving(event):
 		message_formatted = 'From: {0}\nTo: {1}\n\n{2}'.format(sender, current_user, text)
 		infos.append(message_info)
 		messages.append(message_formatted)
-
-	receiving_combo['value'] = infos
+	
+	receiving_combo['values'] = infos
 
 def get_message(_):
 	index = receiving_combo.current()
@@ -293,6 +290,25 @@ def get_message(_):
 	receiving_text.insert(END, '')
 	receiving_text['state'] = DISABLED
 	
+def tab_switching(event):
+	clicked_tab = tabs.index(tabs.select())
+	print(clicked_tab)
+
+	if clicked_tab == tabs.index(tab_register):
+		username_input.delete(0, END)
+		password_input.delete(0, END)
+		password_validation_input['text'] = ''
+
+	elif clicked_tab == tabs.index(tab_messaging):
+		receiver_input.delete(0, END)
+		history_combo['values'] = ('---history---')
+		history_combo.current(0)
+		message_text.delete(1.0, END)
+
+	elif clicked_tab == tabs.index(tab_receiving):
+		receiving_combo['values'] = ()
+		receiving_text.delete(1.0, END)
+
 
 window = tk.Tk()
 window.title('CN Message')
@@ -346,23 +362,20 @@ register_title.place(relx = 0.5, rely = 0.2, anchor = CENTER)
 username_image = tk.PhotoImage(file = './images/username.png')
 username_image_label = tk.Label(tab_register, image = username_image)
 username_image_label.place(relx = 0.35, rely = 0.4, anchor = CENTER)
-username_var = tk.StringVar()
-username_input = tk.Entry(tab_register, width = 32, bd = 3, textvariable = username_var)
+username_input = tk.Entry(tab_register, width = 32, bd = 3)
 username_input.focus()
 username_input.place(relx = 0.5, rely = 0.4, anchor = CENTER)
 
 password_image = tk.PhotoImage(file = './images/password.png')
 password_image_label = tk.Label(tab_register, image = password_image)
 password_image_label.place(relx = 0.35, rely = 0.5, anchor = CENTER)
-password_var = tk.StringVar()
-password_input = tk.Entry(tab_register, width = 32, bd = 3, textvariable = password_var)
+password_input = tk.Entry(tab_register, width = 32, bd = 3)
 password_input.place(relx = 0.5, rely = 0.5, anchor = CENTER)
 
 password_validation_image = tk.PhotoImage(file = './images/check.png')
 password_validation_image_label = tk.Label(tab_register, image = password_validation_image)
 password_validation_image_label.place(relx = 0.35, rely = 0.6, anchor = CENTER)
-password_validation_var = tk.StringVar()
-password_validation_input = tk.Entry(tab_register, width = 32, bd = 3, textvariable = password_validation_var)
+password_validation_input = tk.Entry(tab_register, width = 32, bd = 3)
 password_validation_input.place(relx = 0.5, rely = 0.6, anchor = CENTER)
 
 register_button = tk.Button(tab_register, text = 'Submit', command = signup, font = ('Inconsolata', 24, 'bold'))
@@ -413,6 +426,7 @@ receiving_text.place(relx = 0.5, rely = 0.6, anchor = CENTER)
 
 
 # render tabs
+tabs.bind('<<NotebookTabChanged>>', tab_switching)
 tabs.pack(expand = 1, fill = 'both')
 
 window.mainloop()

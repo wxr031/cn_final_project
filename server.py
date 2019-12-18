@@ -149,6 +149,7 @@ def communicate(conn):
 				del msg_unsent[receiver]
 			else:
 				message = []
+			print(message)
 			message_num = len(message)
 			msg_unsent_lock.release()
 
