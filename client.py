@@ -16,6 +16,9 @@ PASS_MAX_LEN = 1024
 
 client = None
 current_user = None
+messages = []
+n_message = 0
+infos = []
 
 def port_in_use(port):
 	with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -38,10 +41,10 @@ def connect():
 		username_input['state'] = NORMAL
 		password_input['state'] = NORMAL
 		sign_in_up_button['state'] = NORMAL
-		register_status_text['text'] = ''
 
 		tabs.tab(1, state = DISABLED)
 		tabs.tab(2, state = DISABLED)
+		tabs.tab(3, state = DISABLED)
 
 	else:
 		client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -86,32 +89,28 @@ def signup():
 	password_validation = password_validation_var.get()
 
 	if len(username) == 0 or len(password) == 0:
-		register_status_text['text'] = 'Please provide username and password'
-		register_status_text['fg'] = 'red'
+		messagebox.showerror('', 'Please provide username and password')
 		username_input.delete(0, END)
 		password_input.delete(0, END)
 		password_validation_input.delete(0, END)
 		return
 	
 	if len(username) > 1024 or len(password) > 1024:
-		register_status_text['text'] = 'username and password must be less than 1024 characters'
-		register_status_text['fg'] = 'red'
+		messagebox.showerror('', 'username and password must be less than 1024 characters')
 		username_input.delete(0, END)
 		password_input.delete(0, END)
 		password_validation_input.delete(0, END)
 		return
 	
 	if password != password_validation:
-		register_status_text['text'] = 'Password double confirmation failed. Please enter your password again'
-		register_status_text['fg'] = 'red'
+		messagebox.showerror('', 'Password double confirmation failed. Please enter your password again')
 		username_input.delete(0, END)
 		password_input.delete(0, END)
 		password_validation_input.delete(0, END)
 		return
 
 	if not username.isalnum() or not password.isalnum():
-		register_status_text['text'] = 'username and password must only contains alphanumeric values'
-		register_status_text['fg'] = 'red'
+		messagebox.showerror('', 'username and password must only contains alphanumeric values')
 		username_input.delete(0, END)
 		password_input.delete(0, END)
 		password_validation_input.delete(0, END)
@@ -125,15 +124,13 @@ def signup():
 	client.send(username.encode() + b'&' + password.encode())
 	response = client.recv(CMD_MAX_LEN)
 	if response == b'OK':
-		register_status_text['text'] = 'Registration OK'
-		register_status_text['fg'] = 'green'
+		messagebox.showinfo('', 'Registration OK')
 		username_input.delete(0, END)
 		password_input.delete(0, END)
 		password_validation_input.delete(0, END)
 
 	elif response == b'DUP':
-		register_status_text['text'] = 'Username already exist'
-		register_status_text['fg'] = 'red'
+		messagebox.showerror('', 'Username already exist')
 		username_input.delete(0, END)
 		password_input.delete(0, END)
 		password_validation_input.delete(0, END)
@@ -152,11 +149,20 @@ def signin():
 		username_input['state'] = NORMAL
 		password_input['state'] = NORMAL
 		sign_in_up_button['state'] = NORMAL
-		register_status_text['text'] = ''
+
+		message_text.delete(1.0, END)
+
+		receiver_input['text'] = ''
+		history_combo['value'] = ('---history---')
+		receiving_combo['value'] = ()
+		receiving_text.delete(1.0, END)
+		
 		tabs.tab(0, state = NORMAL)
 		tabs.tab(2, state = DISABLED)
+		tabs.tab(3, state = DISABLED)
 
 	else:
+
 		username = username_var.get()
 		password = password_var.get()
 
@@ -169,22 +175,28 @@ def signin():
 
 		client.send(username.encode() + b'&' + password.encode())
 		response = client.recv(CMD_MAX_LEN)
+
 		if response == b'OK':
+			messagebox.showinfo('', 'Login OK')
+
 			# Change UI
-			register_status_text['text'] = 'Login Succeed'
-			register_status_text['fg'] = 'green'
 			username_input.delete(0, END)
 			password_input.delete(0, END)
 			register_button['text'] = 'Logout'
 			username_input['state'] = DISABLED
 			password_input['state'] = DISABLED
 			sign_in_up_button['state'] = DISABLED
+
 			tabs.tab(0, state = DISABLED)
 			tabs.tab(2, state = NORMAL)
+			tabs.tab(3, state = NORMAL)
+
+			history_combo['values'] = ('---history---')
+			receiver_input['text'] = ''
+
 
 		elif response == b'REJ':
-			register_status_text['text'] = 'Login Failed'
-			register_status_text['fg'] = 'red'
+			messagebox.showerror('', 'Invalid username/password')
 			username_input.delete(0, END)
 			password_input.delete(0, END)
 			current_user = None
@@ -197,7 +209,6 @@ def sign_in_up_toggle():
 		sign_in_up_button['text'] = 'Sign Up'
 		sign_in_up_button.place(relx = 0.65, rely = 0.8, anchor = CENTER)
 		register_button.place(relx = 0.5, rely = 0.6, anchor = CENTER)
-		register_status_text['text'] = ''
 		password_validation_input.place_forget()
 		password_validation_image_label.place_forget()
 	
@@ -208,7 +219,6 @@ def sign_in_up_toggle():
 		sign_in_up_button['text'] = 'Sign In'
 		sign_in_up_button.place(relx = 0.6, rely = 0.8, anchor = CENTER)
 		register_button.place(relx = 0.5, rely = 0.7, anchor = CENTER)
-		register_status_text['text'] = ''
 		password_validation_input.place(relx = 0.5, rely = 0.6, anchor = CENTER)
 		password_validation_image_label.place(relx = 0.35, rely = 0.6, anchor = CENTER)
 		
@@ -226,9 +236,18 @@ def set_message(_):
 	message_text.insert(INSERT, text)
 	message_text.insert(END, '')
 
+
 def messaging():
-	receiver = receiver_var.get()
+	receiver = receiver_input.get()
 	text = message_text.get(1.0, END)
+
+	if len(receiver) == 0:
+		messagebox.showerror('', 'Please provide receiver')
+		return
+	
+	if receiver == current_user:
+		messagebox.showerror('', 'Please don\'t send message to yourself')
+		return
 
 	client.send(b'MESSAGE')
 	assert client.recv(CMD_MAX_LEN) == b'FROM'
@@ -240,6 +259,40 @@ def messaging():
 
 	messagebox.showinfo('', 'Message sent')
 
+def receiving(event):
+
+	global n_message
+	
+	client.send(b'RECEIVE')
+	assert client.recv(CMD_MAX_LEN) == b'RECEIVER'
+	client.send(current_user.encode())
+	client_info = client.recv(CMD_MAX_LEN)
+	command, message_num = client_info.split(b'=')
+	assert command == b'#MSG'
+	message_num = int(message_num.decode())
+
+	for i in range(message_num):
+		client.send(b'SENDER')
+		sender = client.recv(USER_MAX_LEN).decode()
+		client.send(b'TEXT')
+		text = client.recv(TXT_MAX_LEN).decode()
+
+		n_message += 1
+		message_info = 'Message #{0} From {1}'.format(n_message, sender)
+		message_formatted = 'From: {0}\nTo: {1}\n\n{2}'.format(sender, current_user, text)
+		infos.append(message_info)
+		messages.append(message_formatted)
+
+	receiving_combo['value'] = infos
+
+def get_message(_):
+	index = receiving_combo.current()
+	receiving_text['state'] = NORMAL
+	receiving_text.delete(1.0, END)
+	receiving_text.insert(INSERT, messages[index])
+	receiving_text.insert(END, '')
+	receiving_text['state'] = DISABLED
+	
 
 window = tk.Tk()
 window.title('CN Message')
@@ -251,9 +304,11 @@ tabs = ttk.Notebook(window)
 tab_home = ttk.Frame(tabs)
 tab_register = ttk.Frame(tabs)
 tab_messaging = ttk.Frame(tabs)
+tab_receiving = ttk.Frame(tabs)
 tabs.add(tab_home, text = 'Home')
 tabs.add(tab_register, text = 'Registration', state = DISABLED)
 tabs.add(tab_messaging, text = 'Messaging', state = DISABLED)
+tabs.add(tab_receiving, text = 'Receiving', state = DISABLED)
 
 # User Interface
 
@@ -319,9 +374,6 @@ sign_in_up_title.place(relx = 0.4, rely = 0.8, anchor = CENTER)
 sign_in_up_button = tk.Button(tab_register, text = 'Sign In', command = sign_in_up_toggle, font = ('Inconsolata', 16, 'bold'))
 sign_in_up_button.place(relx = 0.6, rely = 0.8, anchor = CENTER)
 
-register_status_text = tk.Label(tab_register, text = '', font = ('Inconsolata', 16, 'bold'))
-register_status_text.place(relx = 0.5, rely = 0.9, anchor = CENTER)
-
 
 # Messaging
 messaging_title = tk.Label(tab_messaging, text = 'Messaging', font = ('Inconsolata', 32, 'bold'))
@@ -329,27 +381,36 @@ messaging_title.place(relx = 0.5, rely = 0.15, anchor = CENTER)
 
 receiver_label = tk.Label(tab_messaging, text = 'Send to : ', font = ('Inconsolata', 24))
 receiver_label.place(relx = 0.15, rely = 0.25, anchor = CENTER)
-receiver_var = tk.StringVar()
-receiver_input = tk.Entry(tab_messaging, width = 48, bd = 3, textvariable = receiver_var, font = ('Inconsolata', 18))
+receiver_input = tk.Entry(tab_messaging, width = 48, bd = 3, font = ('Inconsolata', 18))
 receiver_input.place(relx = 0.6, rely = 0.25, anchor = CENTER)
 
 history_label = tk.Label(tab_messaging, text = 'Send to : ', font = ('Inconsolata', 24))
 history_label.place(relx = 0.15, rely = 0.25, anchor = CENTER)
-history_combo = ttk.Combobox(tab_messaging, width = 48, state='readonly', font = ('Inconsolata', 18))
+history_combo = ttk.Combobox(tab_messaging, width = 48, state = 'readonly', font = ('Inconsolata', 18))
 history_combo['values'] = ('---history---')
 history_combo.current(0)
 history_combo.bind('<Button-1>', get_history)
 history_combo.bind('<<ComboboxSelected>>', set_message)
-history_combo.place(relx = 0.5, rely = 0.35, anchor = CENTER)
+history_combo.place(relx = 0.5, rely = 0.33, anchor = CENTER)
 
-message_text = st.ScrolledText(tab_messaging, width = 96, height = 12)
+message_text = st.ScrolledText(tab_messaging, width = 60, height = 12, font = ('Courier', 16))
 message_text.place(relx = 0.5, rely = 0.6, anchor = CENTER)
 
 messaging_button = tk.Button(tab_messaging, text = 'Send', command = messaging, font = ('Inconsolata', 24, 'bold'))
 messaging_button.place(relx = 0.5, rely = 0.9, anchor = CENTER)
 
-messaging_status_text = tk.Label(tab_messaging, text = '')
-messaging_status_text.place(relx = 0.5, rely = 0.9, anchor = CENTER)
+# receiving message
+receiving_title = tk.Label(tab_receiving, text = 'Messaging Receiving', font = ('Inconsolata', 32, 'bold'))
+receiving_title.place(relx = 0.5, rely = 0.15, anchor = CENTER)
+
+receiving_combo = ttk.Combobox(tab_receiving, width = 48, state = 'readonly', font = ('Inconsolata', 18))
+receiving_combo.place(relx = 0.5, rely = 0.3, anchor = CENTER)
+receiving_combo.bind('<Button-1>', receiving)
+receiving_combo.bind('<<ComboboxSelected>>', get_message)
+
+receiving_text = st.Text(tab_receiving, relief = 'raised', width = 48, height = 12, state = DISABLED, font = ('Courier', 16), bg = 'khaki1')
+receiving_text.place(relx = 0.5, rely = 0.6, anchor = CENTER)
+
 
 # render tabs
 tabs.pack(expand = 1, fill = 'both')

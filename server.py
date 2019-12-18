@@ -34,8 +34,8 @@ def communicate(conn):
 			conn.send(b'USER&PASS')
 			request = conn.recv(USER_MAX_LEN + 1 + PASS_MAX_LEN)
 			username, password = tuple(request.split(b'&'))
-			username = username.decode('ascii')
-			password = password.decode('ascii')
+			username = username.decode()
+			password = password.decode()
 
 			auth_file_lock.acquire()
 			if not os.path.exists(auth_file):
@@ -57,8 +57,8 @@ def communicate(conn):
 			conn.send(b'USER&PASS')
 			request = conn.recv(USER_MAX_LEN + 1 + PASS_MAX_LEN)
 			username, password = request.split(b'&')
-			username = username.decode('ascii')
-			password = password.decode('ascii')
+			username = username.decode()
+			password = password.decode()
 			print(username, password)
 
 			auth_file_lock.acquire()
@@ -83,7 +83,7 @@ def communicate(conn):
 
 		elif command == b'LOGOUT':
 			conn.send(b'USER')
-			username = conn.recv(USER_MAX_LEN).decode('ascii')
+			username = conn.recv(USER_MAX_LEN).decode()
 			online_lock.acquire()
 			online.remove(username)
 			online_lock.release()
@@ -91,7 +91,7 @@ def communicate(conn):
 		elif command == b'HISTORY':
 			conn.send(b'USER')
 			username = conn.recv(USER_MAX_LEN)
-			username = username.decode('ascii')
+			username = username.decode()
 
 			hist_file_lock.acquire()
 			if not os.path.exists(hist_file):
@@ -108,17 +108,17 @@ def communicate(conn):
 
 		elif command == b'MESSAGE':
 			conn.send(b'FROM')
-			sender = conn.recv(USER_MAX_LEN).decode('ascii')
+			sender = conn.recv(USER_MAX_LEN).decode()
 			conn.send(b'TO')
-			receiver = conn.recv(USER_MAX_LEN).decode('ascii')
+			receiver = conn.recv(USER_MAX_LEN).decode()
 			conn.send(b'TEXT')
 			text = conn.recv(TXT_MAX_LEN).decode().strip()
 
 			# write message to message buffer
 			msg_unsent_lock.acquire()
-			if not sender in msg_unsent:
-				msg_unsent[sender] = []
-			msg_unsent[sender].append((receiver, text))
+			if not receiver in msg_unsent:
+				msg_unsent[receiver] = []
+			msg_unsent[receiver].append((sender, text))
 			msg_unsent_lock.release()
 			
 			print((sender, receiver, text))
@@ -138,6 +138,28 @@ def communicate(conn):
 					json.dump(hists, fw)
 			hist_file_lock.release()
 
+		elif command == b'RECEIVE':
+			conn.send(b'RECEIVER')
+			receiver = conn.recv(USER_MAX_LEN).decode()
+			
+			# messages
+			msg_unsent_lock.acquire()
+			if receiver in msg_unsent:
+				message = msg_unsent[receiver]
+				del msg_unsent[receiver]
+			else:
+				message = []
+			message_num = len(message)
+			msg_unsent_lock.release()
+
+			# pass messages
+			conn.send(b'#MSG=' + str(message_num).encode())
+			for sender, text in message:
+				assert conn.recv(CMD_MAX_LEN) == b'SENDER'
+				conn.send(sender.encode())
+				assert conn.recv(CMD_MAX_LEN) == b'TEXT'
+				conn.send(text.encode())
+
 		elif command == b'CLOSE':
 			conn.close()
 			break
@@ -149,7 +171,7 @@ def hash_password(password):
 	salt = os.urandom(64)
 	password_hash = hashlib.pbkdf2_hmac('sha256', password, salt, 2048)
 	password_hash = salt + password_hash
-	return binascii.hexlify(password_hash).decode('ascii')
+	return binascii.hexlify(password_hash).decode()
 
 def verify_password(password_hash, password):
 	password_hash = binascii.unhexlify(password_hash)
