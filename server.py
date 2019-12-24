@@ -174,7 +174,7 @@ def communicate(conn):
 			file_store_lock.acquire()
 			if not receiver in file_store:
 				file_store[receiver] = []
-			file_store[receiver].append((sender, tmp_file))
+			file_store[receiver].append((sender, tmp_file, file_name, file_size))
 			file_store_lock.release()
 
 			print(tmp_file)
@@ -202,6 +202,39 @@ def communicate(conn):
 				conn.send(sender.encode())
 				assert conn.recv(CMD_MAX_LEN) == b'TEXT'
 				conn.send(text.encode())
+
+		elif command == b'RECEIVE_FILE':
+			conn.send(b'RECEIVER')
+			receiver = conn.recv(USER_MAX_LEN).decode()
+
+			# messages
+			file_store_lock.acquire()
+			if receiver in file_store:
+				files = file_store[receiver]
+				del file_store[receiver]
+			else:
+				files = []
+			print(files)
+			file_num = len(files)
+			file_store_lock.release()
+
+			# send files
+			conn.send(b'#FILE=' + str(file_num).encode())
+			for sender, tmp_file, file_name, file_size in files:
+				assert conn.recv(CMD_MAX_LEN) == b'SENDER'
+				conn.send(sender.encode())
+				assert conn.recv(CMD_MAX_LEN) == b'FILE_NAME'
+				conn.send(file_name.encode())
+				assert conn.recv(CMD_MAX_LEN) == b'FILE_SIZE'
+				conn.send(str(file_size).encode())
+
+				curr = 0
+				with open(tmp_file, 'rb') as f:
+					while curr < file_size:
+						byte = f.read(BUFF_SIZE)
+						print(byte)
+						conn.send(byte)
+						curr += len(byte)
 
 		elif command == b'CLOSE':
 			conn.close()

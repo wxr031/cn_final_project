@@ -3,6 +3,7 @@ import os
 import random
 import sys
 import socket
+import tempfile
 import tkinter as tk
 import tkinter.ttk as ttk
 import tkinter.scrolledtext as st
@@ -19,7 +20,11 @@ client = None
 current_user = None
 n_message = 0
 messages = []
+n_file = 0
+files = []
+
 infos = []
+file_infos = []
 
 def port_in_use(port):
 	with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -358,13 +363,65 @@ def file_send():
 		while byte:
 			client.send(byte)
 			byte = f.read(BUFF_SIZE)
+	
 			
 
-def file_recv():
-	pass
+def file_recv(_):
+	
+	global n_file
 
-def get_file_name():
-	pass
+	client.send(b'RECEIVE_FILE')
+	assert client.recv(CMD_MAX_LEN) == b'RECEIVER'
+	client.send(current_user.encode())
+	client_info = client.recv(CMD_MAX_LEN)
+	command, file_num = client_info.split(b'=')
+	assert command == b'#FILE'
+	file_num = int(file_num.decode())
+
+	for i in range(file_num):
+		client.send(b'SENDER')
+		sender = client.recv(USER_MAX_LEN).decode()
+		client.send(b'FILE_NAME')
+		file_name = client.recv(TXT_MAX_LEN).decode()
+		client.send(b'FILE_SIZE')
+		file_size = client.recv(CMD_MAX_LEN).decode()
+		file_size = int(file_size)
+
+		n_file += 1
+		message_info = 'File {0} From {1}'.format(file_name, sender)
+		infos.append(message_info)
+		tmp_file = tempfile.mktemp()
+		print(tmp_file)
+		
+		curr = 0
+		with open(tmp_file, 'wb') as f:
+			while curr < file_size:
+				byte = client.recv(BUFF_SIZE)
+				print(byte)
+				f.write(byte)
+				curr += len(byte)
+
+		files.append((tmp_file, file_size))
+		file_infos.append(message_info)
+
+	file_recv_combo['values'] = file_infos
+	
+
+def get_file_name(_):
+	index = file_recv_combo.current()
+	file_recv_text['state'] = NORMAL
+	file_recv_text.delete(1.0, END)
+
+	tmp_file, file_size = files[index]
+	curr = 0
+	with open(tmp_file, 'rb') as f:
+		while curr < file_size:
+			byte = f.read(BUFF_SIZE)
+			file_recv_text.insert(INSERT, byte)
+			print(byte)
+			curr += len(byte)
+	file_recv_text.insert(END, '')
+	file_recv_text['state'] = DISABLED
 
 window = tk.Tk()
 window.title('CN Message')
