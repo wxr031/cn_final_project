@@ -5,6 +5,7 @@ import json
 import hashlib
 import binascii
 import threading
+import tempfile
 
 online = set()
 online_lock = threading.Lock()
@@ -15,6 +16,7 @@ CMD_MAX_LEN = 16
 TXT_MAX_LEN = 4096
 USER_MAX_LEN = 1024
 PASS_MAX_LEN = 1024
+BUFF_SIZE = 4
 
 host = 'localhost'
 port = int(sys.argv[1])
@@ -26,6 +28,9 @@ hist_file_lock = threading.Lock()
 
 msg_unsent = dict()
 msg_unsent_lock = threading.Lock()
+
+file_store = dict()
+file_store_lock = threading.Lock()
 
 def communicate(conn):
 	while True:
@@ -137,6 +142,43 @@ def communicate(conn):
 				with open(hist_file, 'w') as fw:
 					json.dump(hists, fw)
 			hist_file_lock.release()
+
+		elif command == b'FILE':
+			conn.send(b'FROM')
+			sender = conn.recv(USER_MAX_LEN).decode()
+			conn.send(b'TO')
+			receiver = conn.recv(USER_MAX_LEN).decode()
+			
+			if receiver not in online:
+				conn.send(b'NOT_ONLINE')
+				continue
+
+			conn.send(b'FILENAME')
+			file_name = conn.recv(USER_MAX_LEN).decode()
+			conn.send(b'FILESIZE')
+			file_size = int(conn.recv(CMD_MAX_LEN).decode())
+
+			print(sender, receiver, file_name)
+
+			conn.send(b'CONTENT')
+
+			tmp_file = tempfile.mktemp()
+			curr = 0
+			with open(tmp_file, 'wb') as f:
+				while curr < file_size:
+					byte = conn.recv(BUFF_SIZE)
+					print(byte)
+					f.write(byte)
+					curr += len(byte)
+
+			file_store_lock.acquire()
+			if not receiver in file_store:
+				file_store[receiver] = []
+			file_store[receiver].append((sender, tmp_file))
+			file_store_lock.release()
+
+			print(tmp_file)
+				
 
 		elif command == b'RECEIVE':
 			conn.send(b'RECEIVER')

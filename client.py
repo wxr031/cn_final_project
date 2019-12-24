@@ -1,4 +1,5 @@
 import json
+import os
 import random
 import sys
 import socket
@@ -12,6 +13,7 @@ CMD_MAX_LEN = 16
 TXT_MAX_LEN = 4096
 USER_MAX_LEN = 1024
 PASS_MAX_LEN = 1024
+BUFF_SIZE = 4
 
 client = None
 current_user = None
@@ -160,6 +162,8 @@ def signin():
 		tabs.tab(0, state = NORMAL)
 		tabs.tab(2, state = DISABLED)
 		tabs.tab(3, state = DISABLED)
+		tabs.tab(4, state = DISABLED)
+		tabs.tab(5, state = DISABLED)
 
 	else:
 
@@ -190,6 +194,8 @@ def signin():
 			tabs.tab(0, state = DISABLED)
 			tabs.tab(2, state = NORMAL)
 			tabs.tab(3, state = NORMAL)
+			tabs.tab(4, state = NORMAL)
+			tabs.tab(5, state = NORMAL)
 
 		elif response == b'REJ':
 			messagebox.showerror('', 'Invalid username/password')
@@ -256,7 +262,6 @@ def messaging():
 	messagebox.showinfo('', 'Message sent')
 
 def receiving(_):
-	print('receiving')
 
 	global n_message
 	
@@ -291,6 +296,9 @@ def get_message(_):
 	receiving_text['state'] = DISABLED
 	
 def tab_switching(event):
+	
+	global receiving_combo
+
 	clicked_tab = tabs.index(tabs.select())
 	print(clicked_tab)
 
@@ -307,13 +315,60 @@ def tab_switching(event):
 
 	elif clicked_tab == tabs.index(tab_receiving):
 		receiving_combo['values'] = ()
+		receiving_text['state'] = NORMAL
 		receiving_text.delete(1.0, END)
+		receiving_text['state'] = DISABLED
 
+def file_send():
+	file_name = file_name_input.get()
+	receiver = file_receiver_input.get()
+	if not os.path.exists(file_name):
+		messagebox.showerror('', 'File does not exist')
+		return
+	
+	try:
+		f = open(file_name, 'rb')
+		f.close()
+	except:
+		messagebox.showerror('', 'Unable to open the file')
+		return
+		
+	file_size = os.path.getsize(file_name)
+
+	client.send(b'FILE')
+	assert client.recv(CMD_MAX_LEN) == b'FROM'
+	client.send(current_user.encode())
+	assert client.recv(CMD_MAX_LEN) == b'TO'
+	client.send(receiver.encode())
+	res = client.recv(CMD_MAX_LEN)
+
+	if res == b'NOT_ONLINE':
+		messagebox.showerror('', 'User not online')
+		return
+	
+	assert res == b'FILENAME'
+	client.send(file_name.encode())
+	assert client.recv(CMD_MAX_LEN) == b'FILESIZE'
+	client.send(str(file_size).encode())
+	assert client.recv(CMD_MAX_LEN) == b'CONTENT'
+	
+	with open(file_name, 'rb') as f:
+
+		byte = f.read(BUFF_SIZE)
+		while byte:
+			client.send(byte)
+			byte = f.read(BUFF_SIZE)
+			
+
+def file_recv():
+	pass
+
+def get_file_name():
+	pass
 
 window = tk.Tk()
 window.title('CN Message')
 window.geometry('1024x768')
-
 
 # Tabs
 tabs = ttk.Notebook(window)
@@ -321,10 +376,14 @@ tab_home = ttk.Frame(tabs)
 tab_register = ttk.Frame(tabs)
 tab_messaging = ttk.Frame(tabs)
 tab_receiving = ttk.Frame(tabs)
+tab_file_send = ttk.Frame(tabs)
+tab_file_recv = ttk.Frame(tabs)
 tabs.add(tab_home, text = 'Home')
 tabs.add(tab_register, text = 'Registration', state = DISABLED)
 tabs.add(tab_messaging, text = 'Messaging', state = DISABLED)
 tabs.add(tab_receiving, text = 'Receiving', state = DISABLED)
+tabs.add(tab_file_send, text = 'File Transmission', state = DISABLED)
+tabs.add(tab_file_recv, text = 'File Transmission', state = DISABLED)
 
 # User Interface
 
@@ -423,6 +482,35 @@ receiving_combo.bind('<<ComboboxSelected>>', get_message)
 
 receiving_text = st.Text(tab_receiving, relief = 'raised', width = 48, height = 12, state = DISABLED, font = ('Courier', 16), bg = 'khaki1')
 receiving_text.place(relx = 0.5, rely = 0.6, anchor = CENTER)
+
+# File Messaging
+file_send_title = tk.Label(tab_file_send, text = 'File Sending', font = ('Inconsolata', 32, 'bold'))
+file_send_title.place(relx = 0.5, rely = 0.15, anchor = CENTER)
+
+file_receiver_label = tk.Label(tab_file_send, text = 'Send to : ', font = ('Inconsolata', 24))
+file_receiver_label.place(relx = 0.15, rely = 0.35, anchor = CENTER)
+file_receiver_input = tk.Entry(tab_file_send, width = 48, bd = 3, font = ('Inconsolata', 18))
+file_receiver_input.place(relx = 0.6, rely = 0.35, anchor = CENTER)
+
+file_name_label = tk.Label(tab_file_send, text = 'File Name : ', font = ('Inconsolata', 24))
+file_name_label.place(relx = 0.15, rely = 0.5, anchor = CENTER)
+file_name_input = tk.Entry(tab_file_send, width = 48, bd = 3, font = ('Inconsolata', 18))
+file_name_input.place(relx = 0.6, rely = 0.5, anchor = CENTER)
+
+file_send_button = tk.Button(tab_file_send, text = 'Send', command = file_send, font = ('Inconsolata', 24, 'bold'))
+file_send_button.place(relx = 0.5, rely = 0.7, anchor = CENTER)
+
+# receiving message
+file_recv_title = tk.Label(tab_file_recv, text = 'File Receiving', font = ('Inconsolata', 32, 'bold'))
+file_recv_title.place(relx = 0.5, rely = 0.15, anchor = CENTER)
+
+file_recv_combo = ttk.Combobox(tab_file_recv, width = 48, state = 'readonly', font = ('Inconsolata', 18))
+file_recv_combo.place(relx = 0.5, rely = 0.3, anchor = CENTER)
+file_recv_combo.bind('<Button-1>', file_recv)
+file_recv_combo.bind('<<ComboboxSelected>>', get_file_name)
+
+file_recv_text = st.ScrolledText(tab_file_recv, relief = 'raised', width = 48, height = 12, state = DISABLED, font = ('Courier', 16), bg = 'khaki1')
+file_recv_text.place(relx = 0.5, rely = 0.6, anchor = CENTER)
 
 
 # render tabs
