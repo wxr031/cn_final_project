@@ -18,7 +18,7 @@ USER_MAX_LEN = 1024
 PASS_MAX_LEN = 1024
 BUFF_SIZE = 4
 
-host = 'localhost'
+host = '0.0.0.0'
 port = int(sys.argv[1])
 
 auth_file = 'auth.json'
@@ -153,31 +153,36 @@ def communicate(conn):
 				conn.send(b'NOT_ONLINE')
 				continue
 
-			conn.send(b'FILENAME')
-			file_name = conn.recv(USER_MAX_LEN).decode()
-			conn.send(b'FILESIZE')
-			file_size = int(conn.recv(CMD_MAX_LEN).decode())
+			conn.send(b'#FLE')
+			file_num = int(conn.recv(CMD_MAX_LEN).decode())
 
-			print(sender, receiver, file_name)
+			for i in range(file_num):
+			
+				conn.send(b'FILENAME')
+				file_name = conn.recv(USER_MAX_LEN).decode()
+				conn.send(b'FILESIZE')
+				file_size = int(conn.recv(CMD_MAX_LEN).decode())
 
-			conn.send(b'CONTENT')
+				print(sender, receiver, file_name)
 
-			tmp_file = tempfile.mktemp()
-			curr = 0
-			with open(tmp_file, 'wb') as f:
-				while curr < file_size:
-					byte = conn.recv(BUFF_SIZE)
-					print(byte)
-					f.write(byte)
-					curr += len(byte)
+				conn.send(b'CONTENT')
 
-			file_store_lock.acquire()
-			if not receiver in file_store:
-				file_store[receiver] = []
-			file_store[receiver].append((sender, tmp_file, file_name, file_size))
-			file_store_lock.release()
+				tmp_file = tempfile.mktemp()
+				curr = 0
+				with open(tmp_file, 'wb') as f:
+					while curr < file_size:
+						byte = conn.recv(BUFF_SIZE)
+						print(byte)
+						f.write(byte)
+						curr += len(byte)
 
-			print(tmp_file)
+				file_store_lock.acquire()
+				if not receiver in file_store:
+					file_store[receiver] = []
+				file_store[receiver].append((sender, tmp_file, file_name, file_size))
+				file_store_lock.release()
+
+				print(tmp_file)
 				
 
 		elif command == b'RECEIVE':

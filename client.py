@@ -9,6 +9,7 @@ import tkinter.ttk as ttk
 import tkinter.scrolledtext as st
 from tkinter import messagebox
 from tkinter import CENTER, NORMAL, DISABLED, END, INSERT
+from tkinter.filedialog import askopenfilename
 
 CMD_MAX_LEN = 16
 TXT_MAX_LEN = 4096
@@ -18,6 +19,9 @@ BUFF_SIZE = 4
 
 client = None
 current_user = None
+
+send_files = []
+
 n_message = 0
 messages = []
 n_file = 0
@@ -299,46 +303,58 @@ def get_message(_):
 	receiving_text.insert(INSERT, messages[index])
 	receiving_text.insert(END, '')
 	receiving_text['state'] = DISABLED
-	
-def tab_switching(event):
-	
-	global receiving_combo
 
-	clicked_tab = tabs.index(tabs.select())
-	print(clicked_tab)
+def add_file():
+	file_name = askopenfilename()
+	if file_name in send_files:
+		send_files.remove(file_name)
+	send_files.append(file_name)
+	messagebox.showinfo('', 'File Added')
+	file_message = ', '.join(send_files[-2:])
+	if len(send_files) > 2:
+		file_message += ' ...'
+	file_show_table['text'] = file_message
+	file_show_table.place(relx = 0.5, rely = 0.8, anchor = CENTER)
 
-	if clicked_tab == tabs.index(tab_register):
-		username_input.delete(0, END)
-		password_input.delete(0, END)
-		password_validation_input['text'] = ''
-
-	elif clicked_tab == tabs.index(tab_messaging):
-		receiver_input.delete(0, END)
-		history_combo['values'] = ('---history---')
-		history_combo.current(0)
-		message_text.delete(1.0, END)
-
-	elif clicked_tab == tabs.index(tab_receiving):
-		receiving_combo['values'] = ()
-		receiving_text['state'] = NORMAL
-		receiving_text.delete(1.0, END)
-		receiving_text['state'] = DISABLED
+def del_file():
+	file_name = askopenfilename()
+	if file_name in send_files:
+		send_files.remove(file_name)
+		messagebox.showinfo('', 'File Deleted')
+	else:
+		messagebox.showerror('', 'File Not Selected')
+	file_message = ', '.join(send_files[-2:])
+	if len(send_files) > 2:
+		file_message += ' ...'
+	file_show_table['text'] = file_message
+	file_show_table.place(relx = 0.5, rely = 0.8, anchor = CENTER)
 
 def file_send():
-	file_name = file_name_input.get()
-	receiver = file_receiver_input.get()
-	if not os.path.exists(file_name):
-		messagebox.showerror('', 'File does not exist')
-		return
 	
-	try:
-		f = open(file_name, 'rb')
-		f.close()
-	except:
-		messagebox.showerror('', 'Unable to open the file')
+	receiver = file_receiver_input.get()
+	print(receiver)
+
+	if len(receiver) == 0:
+		messagebox.showerror('', 'Please provide receiver')
 		return
 		
-	file_size = os.path.getsize(file_name)
+	if receiver == current_user:
+		messagebox.showerror('', 'Please don\'t send file to toyourself')
+		return
+	
+	print(send_files)
+
+	for file_name in send_files:
+		if not os.path.exists(file_name):
+			messagebox.showerror('', 'File {0} does not exist'.format(file_name))
+			return
+		
+		try:
+			f = open(file_name, 'rb')
+			f.close()
+		except:
+			messagebox.showerror('', 'Unable to open the file {0}'.format(file_name))
+			return
 
 	client.send(b'FILE')
 	assert client.recv(CMD_MAX_LEN) == b'FROM'
@@ -351,21 +367,25 @@ def file_send():
 		messagebox.showerror('', 'User not online')
 		return
 	
-	assert res == b'FILENAME'
-	client.send(file_name.encode())
-	assert client.recv(CMD_MAX_LEN) == b'FILESIZE'
-	client.send(str(file_size).encode())
-	assert client.recv(CMD_MAX_LEN) == b'CONTENT'
+	assert res == b'#FLE'
+	client.send(str(len(send_files)).encode())
 	
-	with open(file_name, 'rb') as f:
+	for file_name in send_files:
+		file_size = os.path.getsize(file_name)
 
-		byte = f.read(BUFF_SIZE)
-		while byte:
-			client.send(byte)
-			byte = f.read(BUFF_SIZE)
+		assert client.recv(CMD_MAX_LEN) == b'FILENAME'
+		client.send(file_name.encode())
+		assert client.recv(CMD_MAX_LEN) == b'FILESIZE'
+		client.send(str(file_size).encode())
+		assert client.recv(CMD_MAX_LEN) == b'CONTENT'
+		
+		curr = 0
+		with open(file_name, 'rb') as f:
+			while curr < file_size:
+				byte = f.read(BUFF_SIZE)
+				client.send(byte)
+				curr += len(byte)
 	
-			
-
 def file_recv(_):
 	
 	global n_file
@@ -422,7 +442,32 @@ def get_file_name(_):
 			curr += len(byte)
 	file_recv_text.insert(END, '')
 	file_recv_text['state'] = DISABLED
+	
+def tab_switching(event):
+	
+	global receiving_combo
 
+	clicked_tab = tabs.index(tabs.select())
+	print(clicked_tab)
+
+	if clicked_tab == tabs.index(tab_register):
+		username_input.delete(0, END)
+		password_input.delete(0, END)
+		password_validation_input['text'] = ''
+
+	elif clicked_tab == tabs.index(tab_messaging):
+		receiver_input.delete(0, END)
+		history_combo['values'] = ('---history---')
+		history_combo.current(0)
+		message_text.delete(1.0, END)
+
+	elif clicked_tab == tabs.index(tab_receiving):
+		receiving_combo['values'] = ()
+		receiving_text['state'] = NORMAL
+		receiving_text.delete(1.0, END)
+		receiving_text['state'] = DISABLED
+
+# main window
 window = tk.Tk()
 window.title('CN Message')
 window.geometry('1024x768')
@@ -440,7 +485,7 @@ tabs.add(tab_register, text = 'Registration', state = DISABLED)
 tabs.add(tab_messaging, text = 'Messaging', state = DISABLED)
 tabs.add(tab_receiving, text = 'Receiving', state = DISABLED)
 tabs.add(tab_file_send, text = 'File Transmission', state = DISABLED)
-tabs.add(tab_file_recv, text = 'File Transmission', state = DISABLED)
+tabs.add(tab_file_recv, text = 'File Receiving', state = DISABLED)
 
 # User Interface
 
@@ -549,13 +594,20 @@ file_receiver_label.place(relx = 0.15, rely = 0.35, anchor = CENTER)
 file_receiver_input = tk.Entry(tab_file_send, width = 48, bd = 3, font = ('Inconsolata', 18))
 file_receiver_input.place(relx = 0.6, rely = 0.35, anchor = CENTER)
 
-file_name_label = tk.Label(tab_file_send, text = 'File Name : ', font = ('Inconsolata', 24))
-file_name_label.place(relx = 0.15, rely = 0.5, anchor = CENTER)
-file_name_input = tk.Entry(tab_file_send, width = 48, bd = 3, font = ('Inconsolata', 18))
-file_name_input.place(relx = 0.6, rely = 0.5, anchor = CENTER)
+file_name_label = tk.Label(tab_file_send, text = 'Choose to Add or Delete Files', font = ('Inconsolata', 24))
+file_name_label.place(relx = 0.5, rely = 0.5, anchor = CENTER)
+
+file_add_button = tk.Button(tab_file_send, text = 'Add File', command = add_file, font = ('Inconsolata', 24))
+file_add_button.place(relx = 0.33, rely = 0.65, anchor = CENTER)
+
+file_del_button = tk.Button(tab_file_send, text = 'Delete File', command = del_file, font = ('Inconsolata', 24))
+file_del_button.place(relx = 0.67, rely = 0.65, anchor = CENTER)
+
+file_show_table = tk.Label(tab_file_send, text = '', font = ('Noto Mono', 12))
+file_show_table.place(relx = 0.5, rely = 0.8, anchor = CENTER)
 
 file_send_button = tk.Button(tab_file_send, text = 'Send', command = file_send, font = ('Inconsolata', 24, 'bold'))
-file_send_button.place(relx = 0.5, rely = 0.7, anchor = CENTER)
+file_send_button.place(relx = 0.5, rely = 0.9, anchor = CENTER)
 
 # receiving message
 file_recv_title = tk.Label(tab_file_recv, text = 'File Receiving', font = ('Inconsolata', 32, 'bold'))
