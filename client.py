@@ -15,7 +15,7 @@ CMD_MAX_LEN = 16
 TXT_MAX_LEN = 4096
 USER_MAX_LEN = 1024
 PASS_MAX_LEN = 1024
-BUFF_SIZE = 4
+BUFF_SIZE = 4096
 
 client = None
 current_user = None
@@ -24,7 +24,6 @@ send_files = []
 
 n_message = 0
 messages = []
-n_file = 0
 files = []
 
 infos = []
@@ -96,7 +95,7 @@ def connect():
 def signup():
 	username = username_input.get()
 	password = password_input.get()
-	password_validation = password_validation.get()
+	password_validation = password_validation_input.get()
 
 	if len(username) == 0 or len(password) == 0:
 		messagebox.showerror('', 'Please provide username and password')
@@ -150,6 +149,8 @@ def signin():
 	global current_user
 	global infos
 	global messages
+	global files
+	global file_infos
 	global n_message
 
 	if register_button['text'] == 'Logout':
@@ -164,8 +165,10 @@ def signin():
 		sign_in_up_button['state'] = NORMAL
 
 		message_text.delete(1.0, END)
-		infos = []
+		files = []
 		messages = []
+		infos = []
+		file_infos = []
 		n_message = 0
 
 		tabs.tab(0, state = NORMAL)
@@ -211,7 +214,14 @@ def signin():
 			username_input.delete(0, END)
 			password_input.delete(0, END)
 			current_user = None
+
+		elif response == b'ONL':
+			messagebox.showerror('', 'User already online')
+			username_input.delete(0, END)
+			password_input.delete(0, END)
+			current_user = None
 	
+
 def sign_in_up_toggle():
 	if sign_in_up_button['text'] == 'Sign In':
 		register_title['text'] = 'Sign In'
@@ -254,6 +264,10 @@ def messaging():
 
 	if len(receiver) == 0:
 		messagebox.showerror('', 'Please provide receiver')
+		return
+	
+	if len(text) == 0:
+		messagebox.showerror('', 'Please provide text')
 		return
 	
 	if receiver == current_user:
@@ -305,6 +319,7 @@ def get_message(_):
 	receiving_text['state'] = DISABLED
 
 def add_file():
+	global send_files
 	file_name = askopenfilename()
 	if file_name in send_files:
 		send_files.remove(file_name)
@@ -316,20 +331,16 @@ def add_file():
 	file_show_table['text'] = file_message
 	file_show_table.place(relx = 0.5, rely = 0.8, anchor = CENTER)
 
+
 def del_file():
-	file_name = askopenfilename()
-	if file_name in send_files:
-		send_files.remove(file_name)
-		messagebox.showinfo('', 'File Deleted')
-	else:
-		messagebox.showerror('', 'File Not Selected')
-	file_message = ', '.join(send_files[-2:])
-	if len(send_files) > 2:
-		file_message += ' ...'
-	file_show_table['text'] = file_message
+	global send_files
+	send_files = []
+	file_show_table['text'] = ''
 	file_show_table.place(relx = 0.5, rely = 0.8, anchor = CENTER)
+	messagebox.showwarning('', 'Files deleted')
 
 def file_send():
+	global send_files
 	
 	receiver = file_receiver_input.get()
 	print(receiver)
@@ -337,7 +348,11 @@ def file_send():
 	if len(receiver) == 0:
 		messagebox.showerror('', 'Please provide receiver')
 		return
-		
+
+	if len(send_files) == 0:
+		messagebox.showerror('', 'Please provide at least one file')
+		return
+	
 	if receiver == current_user:
 		messagebox.showerror('', 'Please don\'t send file to toyourself')
 		return
@@ -386,9 +401,12 @@ def file_send():
 				client.send(byte)
 				curr += len(byte)
 	
-def file_recv(_):
+	messagebox.showinfo('', 'File sent')
+	send_files = []
+	file_show_table['text'] = ''
+
 	
-	global n_file
+def file_recv(_):
 
 	client.send(b'RECEIVE_FILE')
 	assert client.recv(CMD_MAX_LEN) == b'RECEIVER'
@@ -397,6 +415,7 @@ def file_recv(_):
 	command, file_num = client_info.split(b'=')
 	assert command == b'#FILE'
 	file_num = int(file_num.decode())
+	print('file num = ' + str(file_num))
 
 	for i in range(file_num):
 		client.send(b'SENDER')
@@ -407,9 +426,8 @@ def file_recv(_):
 		file_size = client.recv(CMD_MAX_LEN).decode()
 		file_size = int(file_size)
 
-		n_file += 1
 		message_info = 'File {0} From {1}'.format(file_name, sender)
-		infos.append(message_info)
+		file_infos.append(message_info)
 		tmp_file = tempfile.mktemp()
 		print(tmp_file)
 		
@@ -422,7 +440,6 @@ def file_recv(_):
 				curr += len(byte)
 
 		files.append((tmp_file, file_size))
-		file_infos.append(message_info)
 
 	file_recv_combo['values'] = file_infos
 	
@@ -466,7 +483,18 @@ def tab_switching(event):
 		receiving_text['state'] = NORMAL
 		receiving_text.delete(1.0, END)
 		receiving_text['state'] = DISABLED
-
+	
+	elif clicked_tab == tabs.index(tab_file_send):
+		file_receiver_input.delete(0, END)
+		file_show_table['text'] = ''
+		send_files = []
+	
+	elif clicked_tab == tabs.index(tab_file_recv):
+		file_recv_combo['values'] = ()
+		file_recv_text['state'] = NORMAL
+		file_recv_text.delete(1.0, END)
+		file_recv_text['state'] = DISABLED
+		
 # main window
 window = tk.Tk()
 window.title('CN Message')
@@ -530,13 +558,13 @@ username_input.place(relx = 0.5, rely = 0.4, anchor = CENTER)
 password_image = tk.PhotoImage(file = './images/password.png')
 password_image_label = tk.Label(tab_register, image = password_image)
 password_image_label.place(relx = 0.35, rely = 0.5, anchor = CENTER)
-password_input = tk.Entry(tab_register, width = 32, bd = 3)
+password_input = tk.Entry(tab_register, width = 32, bd = 3, show = '*')
 password_input.place(relx = 0.5, rely = 0.5, anchor = CENTER)
 
 password_validation_image = tk.PhotoImage(file = './images/check.png')
 password_validation_image_label = tk.Label(tab_register, image = password_validation_image)
 password_validation_image_label.place(relx = 0.35, rely = 0.6, anchor = CENTER)
-password_validation_input = tk.Entry(tab_register, width = 32, bd = 3)
+password_validation_input = tk.Entry(tab_register, width = 32, bd = 3, show = '*')
 password_validation_input.place(relx = 0.5, rely = 0.6, anchor = CENTER)
 
 register_button = tk.Button(tab_register, text = 'Submit', command = signup, font = ('Inconsolata', 24, 'bold'))
@@ -618,7 +646,7 @@ file_recv_combo.place(relx = 0.5, rely = 0.3, anchor = CENTER)
 file_recv_combo.bind('<Button-1>', file_recv)
 file_recv_combo.bind('<<ComboboxSelected>>', get_file_name)
 
-file_recv_text = st.ScrolledText(tab_file_recv, relief = 'raised', width = 48, height = 12, state = DISABLED, font = ('Courier', 16), bg = 'khaki1')
+file_recv_text = st.ScrolledText(tab_file_recv, relief = 'raised', width = 60, height = 15, state = DISABLED, font = ('Courier', 14), bg = 'khaki1')
 file_recv_text.place(relx = 0.5, rely = 0.6, anchor = CENTER)
 
 

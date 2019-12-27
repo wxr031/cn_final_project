@@ -16,7 +16,7 @@ CMD_MAX_LEN = 16
 TXT_MAX_LEN = 4096
 USER_MAX_LEN = 1024
 PASS_MAX_LEN = 1024
-BUFF_SIZE = 4
+BUFF_SIZE = 4096
 
 host = '0.0.0.0'
 port = int(sys.argv[1])
@@ -66,25 +66,29 @@ def communicate(conn):
 			password = password.decode()
 			print(username, password)
 
-			auth_file_lock.acquire()
-			if not os.path.exists(auth_file):
-				with open(auth_file, 'w') as fw:
-					json.dump({}, fw)
-			with open(auth_file, 'r') as fr:
-				auth = json.load(fr)
-				if username in auth:
-					password_hash = auth[username]
-					if verify_password(password_hash, password):
-						online_lock.acquire()
-						online.add(username)
-						online_lock.release()
-						conn.send(b'OK')
-						
+			if username in online:
+				conn.send(b'ONL')
+			
+			else:
+				auth_file_lock.acquire()
+				if not os.path.exists(auth_file):
+					with open(auth_file, 'w') as fw:
+						json.dump({}, fw)
+				with open(auth_file, 'r') as fr:
+					auth = json.load(fr)
+					if username in auth:
+						password_hash = auth[username]
+						if verify_password(password_hash, password):
+							online_lock.acquire()
+							online.add(username)
+							online_lock.release()
+							conn.send(b'OK')
+							
+						else:
+							conn.send(b'REJ')
 					else:
 						conn.send(b'REJ')
-				else:
-					conn.send(b'REJ')
-			auth_file_lock.release()
+				auth_file_lock.release()
 
 		elif command == b'LOGOUT':
 			conn.send(b'USER')
