@@ -343,7 +343,6 @@ def file_send():
 	global send_files
 	
 	receiver = file_receiver_input.get()
-	print(receiver)
 
 	if len(receiver) == 0:
 		messagebox.showerror('', 'Please provide receiver')
@@ -357,7 +356,6 @@ def file_send():
 		messagebox.showerror('', 'Please don\'t send file to toyourself')
 		return
 	
-	print(send_files)
 
 	for file_name in send_files:
 		if not os.path.exists(file_name):
@@ -415,7 +413,6 @@ def file_recv(_):
 	command, file_num = client_info.split(b'=')
 	assert command == b'#FILE'
 	file_num = int(file_num.decode())
-	print('file num = ' + str(file_num))
 
 	for i in range(file_num):
 		client.send(b'SENDER')
@@ -429,13 +426,11 @@ def file_recv(_):
 		message_info = 'File {0} From {1}'.format(file_name, sender)
 		file_infos.append(message_info)
 		tmp_file = tempfile.mktemp()
-		print(tmp_file)
 		
 		curr = 0
 		with open(tmp_file, 'wb') as f:
 			while curr < file_size:
 				byte = client.recv(BUFF_SIZE)
-				print(byte)
 				f.write(byte)
 				curr += len(byte)
 
@@ -455,7 +450,6 @@ def get_file_name(_):
 		while curr < file_size:
 			byte = f.read(BUFF_SIZE)
 			file_recv_text.insert(INSERT, byte)
-			print(byte)
 			curr += len(byte)
 	file_recv_text.insert(END, '')
 	file_recv_text['state'] = DISABLED
@@ -465,7 +459,6 @@ def tab_switching(event):
 	global receiving_combo
 
 	clicked_tab = tabs.index(tabs.select())
-	print(clicked_tab)
 
 	if clicked_tab == tabs.index(tab_register):
 		username_input.delete(0, END)
@@ -542,38 +535,42 @@ status_text = tk.Label(tab_home, text = '', font = ('Inconsolata', 16, 'bold'))
 status_text.place(relx = 0.5, rely = 0.8, anchor = CENTER)
 
 connect_button = tk.Button(tab_home, text = 'Connect', command = connect, font = ('Inconsolata', 24, 'bold'))
+connect_button.bind('<Return>', lambda _ : connect())
 connect_button.place(relx = 0.5, rely = 0.65, anchor = CENTER)
 
 # Registration
 register_title = tk.Label(tab_register, text = 'Sign Up', font = ('Inconsolata', 36, 'bold'))
 register_title.place(relx = 0.5, rely = 0.2, anchor = CENTER)
 
-username_image = tk.PhotoImage(file = './images/username.png')
+username_image = tk.PhotoImage(file = '../images/username.png')
 username_image_label = tk.Label(tab_register, image = username_image)
 username_image_label.place(relx = 0.35, rely = 0.4, anchor = CENTER)
 username_input = tk.Entry(tab_register, width = 32, bd = 3)
 username_input.focus()
 username_input.place(relx = 0.5, rely = 0.4, anchor = CENTER)
 
-password_image = tk.PhotoImage(file = './images/password.png')
+password_image = tk.PhotoImage(file = '../images/password.png')
 password_image_label = tk.Label(tab_register, image = password_image)
 password_image_label.place(relx = 0.35, rely = 0.5, anchor = CENTER)
 password_input = tk.Entry(tab_register, width = 32, bd = 3, show = '*')
 password_input.place(relx = 0.5, rely = 0.5, anchor = CENTER)
 
-password_validation_image = tk.PhotoImage(file = './images/check.png')
+password_validation_image = tk.PhotoImage(file = '../images/check.png')
 password_validation_image_label = tk.Label(tab_register, image = password_validation_image)
 password_validation_image_label.place(relx = 0.35, rely = 0.6, anchor = CENTER)
 password_validation_input = tk.Entry(tab_register, width = 32, bd = 3, show = '*')
 password_validation_input.place(relx = 0.5, rely = 0.6, anchor = CENTER)
 
 register_button = tk.Button(tab_register, text = 'Submit', command = signup, font = ('Inconsolata', 24, 'bold'))
+register_button.bind('<Return>', lambda _ : signup() if sign_in_up_button['text'] == 'Sign In' else signin())
+	
 register_button.place(relx = 0.5, rely = 0.7, anchor = CENTER)
 
 sign_in_up_title = tk.Label(tab_register, text = 'Have an account?', font = ('Inconsolata', 18))
 sign_in_up_title.place(relx = 0.4, rely = 0.8, anchor = CENTER)
 
 sign_in_up_button = tk.Button(tab_register, text = 'Sign In', command = sign_in_up_toggle, font = ('Inconsolata', 16, 'bold'))
+sign_in_up_button.bind('<Return>', lambda _ : sign_in_up_toggle())
 sign_in_up_button.place(relx = 0.6, rely = 0.8, anchor = CENTER)
 
 
@@ -599,6 +596,7 @@ message_text = st.ScrolledText(tab_messaging, width = 60, height = 12, font = ('
 message_text.place(relx = 0.5, rely = 0.6, anchor = CENTER)
 
 messaging_button = tk.Button(tab_messaging, text = 'Send', command = messaging, font = ('Inconsolata', 24, 'bold'))
+messaging_button.bind('<Return>', lambda _ : messaging())
 messaging_button.place(relx = 0.5, rely = 0.9, anchor = CENTER)
 
 # receiving message
@@ -626,15 +624,18 @@ file_name_label = tk.Label(tab_file_send, text = 'Choose to Add or Delete Files'
 file_name_label.place(relx = 0.5, rely = 0.5, anchor = CENTER)
 
 file_add_button = tk.Button(tab_file_send, text = 'Add File', command = add_file, font = ('Inconsolata', 24))
+file_add_button.bind('<Return>', lambda _ : add_file())
 file_add_button.place(relx = 0.33, rely = 0.65, anchor = CENTER)
 
 file_del_button = tk.Button(tab_file_send, text = 'Delete File', command = del_file, font = ('Inconsolata', 24))
+file_del_button.bind('<Return>', lambda _ : del_file())
 file_del_button.place(relx = 0.67, rely = 0.65, anchor = CENTER)
 
 file_show_table = tk.Label(tab_file_send, text = '', font = ('Noto Mono', 12))
 file_show_table.place(relx = 0.5, rely = 0.8, anchor = CENTER)
 
 file_send_button = tk.Button(tab_file_send, text = 'Send', command = file_send, font = ('Inconsolata', 24, 'bold'))
+file_send_button.bind('<Return>', lambda _ : file_send())
 file_send_button.place(relx = 0.5, rely = 0.9, anchor = CENTER)
 
 # receiving message

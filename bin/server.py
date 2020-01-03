@@ -21,9 +21,9 @@ BUFF_SIZE = 4096
 host = '0.0.0.0'
 port = int(sys.argv[1])
 
-auth_file = 'auth.json'
+auth_file = '../etc/auth.json'
 auth_file_lock = threading.Lock()
-hist_file = 'hist.json'
+hist_file = '../etc/hist.json'
 hist_file_lock = threading.Lock()
 
 msg_unsent = dict()
@@ -33,6 +33,7 @@ file_store = dict()
 file_store_lock = threading.Lock()
 
 def communicate(conn):
+	curr_user = None
 	while True:
 		command = conn.recv(CMD_MAX_LEN)
 		if command == b'SIGNUP':
@@ -48,7 +49,6 @@ def communicate(conn):
 					json.dump({}, fw)
 			with open(auth_file, 'r') as fr:
 				auth = json.load(fr)
-				print(auth)
 				if username in auth:
 					conn.send(b'DUP')
 				else:
@@ -64,7 +64,6 @@ def communicate(conn):
 			username, password = request.split(b'&')
 			username = username.decode()
 			password = password.decode()
-			print(username, password)
 
 			if username in online:
 				conn.send(b'ONL')
@@ -82,6 +81,8 @@ def communicate(conn):
 							online_lock.acquire()
 							online.add(username)
 							online_lock.release()
+
+							curr_user = username
 							conn.send(b'OK')
 							
 						else:
@@ -130,8 +131,6 @@ def communicate(conn):
 			msg_unsent[receiver].append((sender, text))
 			msg_unsent_lock.release()
 			
-			print((sender, receiver, text))
-
 			# store message to history
 			hist_file_lock.acquire()
 			if not os.path.exists(hist_file):
@@ -167,8 +166,6 @@ def communicate(conn):
 				conn.send(b'FILESIZE')
 				file_size = int(conn.recv(CMD_MAX_LEN).decode())
 
-				print(sender, receiver, file_name)
-
 				conn.send(b'CONTENT')
 
 				tmp_file = tempfile.mktemp()
@@ -176,7 +173,6 @@ def communicate(conn):
 				with open(tmp_file, 'wb') as f:
 					while curr < file_size:
 						byte = conn.recv(BUFF_SIZE)
-						print(byte)
 						f.write(byte)
 						curr += len(byte)
 
@@ -186,7 +182,6 @@ def communicate(conn):
 				file_store[receiver].append((sender, tmp_file, file_name, file_size))
 				file_store_lock.release()
 
-				print(tmp_file)
 				
 
 		elif command == b'RECEIVE':
@@ -200,7 +195,6 @@ def communicate(conn):
 				del msg_unsent[receiver]
 			else:
 				message = []
-			print(message)
 			message_num = len(message)
 			msg_unsent_lock.release()
 
@@ -223,7 +217,6 @@ def communicate(conn):
 				del file_store[receiver]
 			else:
 				files = []
-			print(files)
 			file_num = len(files)
 			file_store_lock.release()
 
@@ -241,12 +234,18 @@ def communicate(conn):
 				with open(tmp_file, 'rb') as f:
 					while curr < file_size:
 						byte = f.read(BUFF_SIZE)
-						print(byte)
 						conn.send(byte)
 						curr += len(byte)
 
 		elif command == b'CLOSE':
 			conn.close()
+			break
+
+		else:
+			if curr_user is not None:
+				online_lock.acquire()
+				online.remove(curr_user)
+				online_lock.release()
 			break
 	
 
@@ -276,7 +275,7 @@ while True:
 	threads.append(thread)
 	thread.start()
 
-for thread in threads:
-	thread.join()
+#for thread in threads:
+	#thread.join()
 
 socket.close()
